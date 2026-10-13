@@ -27,8 +27,8 @@ Ensure you have standard Bluetooth utilities installed:
 
 **1. Clone the repository:**
 ```bash
-git clone [https://github.com/SteavenGamerYT/FanTech.git](https://github.com/SteavenGamerYT/FanTech.git)
-cd FanTech
+git clone [https://github.com/SteavenGamerYT/fantech-controllers.git](https://github.com/SteavenGamerYT/fantech-controllers.git)
+cd fantech-controllers
 ```
 
 **2. Find your Controller's MAC Address:**
