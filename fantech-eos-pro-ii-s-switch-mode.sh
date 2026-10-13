@@ -1,4 +1,3 @@
-
 #!/usr/bin/env bash
 
 # Fantech EOS PRO II S WGP15V2S Bluetooth Repair
@@ -7,11 +6,12 @@
 
 MAC="98:B6:E9:A3:25:9B"
 NAME="Fantech EOS PRO II S WGP15V2S"
+MAX_RETRIES=3
 
 clear
 
 echo "============================================================"
-echo "       FANTECH EOS PRO II S - BLUETOOTH REPAIR"
+echo "       FANTECH EOS PRO II S - BLUETOOTH CONNECT"
 echo "============================================================"
 echo
 echo "Controller: $NAME"
@@ -19,16 +19,44 @@ echo "Address:    $MAC"
 echo
 echo "This script will:"
 echo "  1. Check Bluetooth adapter availability."
-echo "  2. Enable Bluetooth Services."
-echo "  3. Enable Bluetooth"
-echo "  4. Remove this controller's existing pairing."
-echo "  5. Scan for the controller."
-echo "  6. Pair, trust, and connect it."
+echo "  2. Enable the Bluetooth service and adapter."
+echo "  3. Remove this controller's existing pairing."
+echo "  4. Wait for you to enable pairing mode."
+echo "  5. Scan, pair, trust, and connect the controller."
+echo "  6. Offer a service restart if a step fails."
 echo
-echo "No Bluetooth service changes will be made."
 echo "Other Bluetooth device pairings will not be removed."
 echo
 read -rp "Press ENTER to begin, or Ctrl+C to cancel..."
+
+
+restart_bluetooth_on_failure() {
+    local answer
+
+    while true; do
+        read -rp "Step failed. Restart Bluetooth service and retry? [y/N]: " answer
+
+        case "$answer" in
+            [Yy]|[Yy][Ee][Ss])
+                sudo systemctl restart bluetooth.service || return 1
+                sudo rfkill unblock bluetooth 2>/dev/null || true
+                sleep 2
+                bluetoothctl power on
+                bluetoothctl agent on
+                bluetoothctl default-agent
+                bluetoothctl pairable on
+                return 0
+                ;;
+            [Nn]|[Nn][Oo]|"")
+                echo "Bluetooth restart skipped."
+                return 1
+                ;;
+            *)
+                echo "Please enter Y or N."
+                ;;
+        esac
+    done
+}
 
 # Check Bluetooth adapter without changing the service.
 if ! bluetoothctl show >/dev/null 2>&1; then
@@ -84,25 +112,51 @@ echo "Attempting to pair with $NAME..."
 if ! bluetoothctl pair "$MAC"; then
     echo
     echo "ERROR: Pairing failed."
-    echo "Ensure the controller is still in pairing mode."
-    exit 1
+    echo "Restarting Bluetooth and starting the script over..."
+
+    if restart_bluetooth_on_failure; then
+        sleep 2
+        exec bash "$0"
+    else
+        exit 1
+    fi
 fi
 
 echo
 echo "Trusting controller..."
-bluetoothctl trust "$MAC" || true
+
+if ! bluetoothctl trust "$MAC"; then
+    echo
+    echo "ERROR: Trusting the controller failed."
+    echo "Restarting Bluetooth and starting the script over..."
+
+    if restart_bluetooth_on_failure; then
+        sleep 2
+        exec bash "$0"
+    else
+        exit 1
+    fi
+fi
 
 echo
 echo "Connecting controller..."
+
 if bluetoothctl connect "$MAC"; then
     echo
     echo "============================================================"
-    echo "                REPAIR SUCCESSFUL"
+    echo "              CONNECTION SUCCESSFUL"
     echo "============================================================"
     echo "$NAME is paired and connected."
     echo "Test it in Steam or your game."
 else
     echo
     echo "ERROR: Pairing succeeded, but connection failed."
-    exit 1
+    echo "Restarting Bluetooth and starting the script over..."
+
+    if restart_bluetooth_on_failure; then
+        sleep 2
+        exec bash "$0"
+    else
+        exit 1
+    fi
 fi
